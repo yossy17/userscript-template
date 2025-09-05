@@ -68,50 +68,7 @@ function userscriptMetaPlugin(isDev = false) {
       const fileName = "userscript.user.js";
       const chunk = bundle[fileName];
       if (chunk && chunk.type === "chunk") {
-        let code = buildMeta(metadata, isDev) + "\n" + chunk.code;
-
-        // 開発モードの場合、リロード検知機能を追加
-        if (isDev) {
-          const devCode = `
-            // 🔧 Development Mode Features
-            (function() {
-              const DEV_SERVER = 'http://localhost:3000';
-              let lastCheck = Date.now();
-              
-              // Violetmonkey用のリロード検知
-              function checkForUpdates() {
-                fetch(DEV_SERVER + '/userscript.user.js?' + Date.now(), { 
-                  method: 'HEAD',
-                  cache: 'no-store'
-                })
-                .then(response => {
-                  const lastModified = new Date(response.headers.get('last-modified')).getTime();
-                  if (lastModified > lastCheck) {
-                    console.log('🔄 Script updated, reloading page...');
-                    lastCheck = lastModified;
-                    setTimeout(() => location.reload(), 100);
-                  }
-                })
-                .catch(() => {
-                  // 開発サーバーが停止している場合は無視
-                });
-              }
-              
-              // 3秒ごとに更新チェック
-              if (typeof setInterval !== 'undefined') {
-                setInterval(checkForUpdates, 3000);
-              }
-              
-              // 開発モード表示
-              console.log('%c🚀 Development Mode Active', 'color: #4CAF50; font-weight: bold; font-size: 16px;');
-              console.log('%cWatching for changes...', 'color: #2196F3; font-size: 12px;');
-            })();
-
-          `;
-          code = code + devCode;
-        }
-
-        chunk.code = code;
+        chunk.code = buildMeta(metadata, isDev) + "\n" + chunk.code;
       }
     },
   };
