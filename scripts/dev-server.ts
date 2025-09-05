@@ -82,9 +82,16 @@ bs.init({
 
           if (fs.existsSync(scriptPath)) {
             const stats = fs.statSync(scriptPath);
-            // これを追加することで fetch(…, { method: 'HEAD' }) が
-            // 正しく更新を検知できる
             res.setHeader("Last-Modified", stats.mtime.toUTCString());
+
+            const etag = `"${stats.size}-${stats.mtime.getTime()}"`;
+            res.setHeader("ETag", etag);
+
+            if (req.headers["if-none-match"] === etag) {
+              res.statusCode = 304;
+              res.end();
+              return;
+            }
           }
 
           res.setHeader("Content-Type", "application/javascript");

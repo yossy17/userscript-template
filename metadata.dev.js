@@ -1,14 +1,10 @@
 // ==UserScript==
 // @name         DEV LOADER
-// @description  Development loader with enhanced reload detection
+// @description  Development loader with ETag-based reload detection
 // @version      1.0.0-dev
 // @author       Yos_sy
 // @match        *://*/*
 // @namespace    http://tampermonkey.net/
-// @grant        GM.setClipboard
-// @grant        GM.registerMenuCommand
-// @grant        GM.setValue
-// @grant        GM.getValue
 // @grant        unsafeWindow
 // @connect      localhost
 // @connect      127.0.0.1
@@ -19,178 +15,125 @@
   "use strict";
 
   const DEV_SERVER = "http://localhost:3000";
-  const CHECK_INTERVAL = 2000; // 2秒ごとにチェック
+  const CHECK_INTERVAL = 5000; // 5秒ごとにチェック
 
-  console.log("🔧 Enhanced Development Loader Starting...");
+  console.log("🔧 Development Loader Starting...");
 
-  let lastModified = 0;
-  let checkTimer = null;
+  let lastEtag = null;
   let loadedScript = null;
+  let checkTimer = null;
 
-  // より確実なスクリプト更新チェック
   async function checkForUpdates() {
     try {
-      const response = await fetch(`${DEV_SERVER}/userscript.user.js`, {
+      const res = await fetch(`${DEV_SERVER}/userscript.user.js`, {
         method: "HEAD",
-        cache: "no-cache",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
+        cache: "no-store",
       });
 
-      if (response.ok) {
-        const newModified = response.headers.get("last-modified");
-        const newETag = response.headers.get("etag");
-        const modifiedTime = newModified
-          ? new Date(newModified).getTime()
-          : Date.now();
-
-        // 詳細ログは開発者が必要な時のみ
-        // console.log(`📊 Server check - Modified: ${newModified}, ETag: ${newETag}`);
-
-        if (modifiedTime > lastModified) {
-          console.log("🔄 Script updated detected, reloading script...");
-          lastModified = modifiedTime;
-
-          if (lastModified > 0) {
-            // 初回以外はリロード
-            await loadDevScript();
-          }
+      if (res.ok) {
+        const newEtag = res.headers.get("etag");
+        if (newEtag && newEtag !== lastEtag) {
+          console.log("🔄 Update detected, reloading script...");
+          lastEtag = newEtag;
+          await loadDevScript();
         }
       }
-    } catch (error) {
-      console.warn("⚠️ Update check failed:", error.message);
+    } catch (err) {
+      console.warn("⚠️ Update check failed:", err.message);
     }
   }
 
-  // スクリプトをテキストとして取得して評価する方法に変更
   async function loadDevScript() {
     try {
-      console.log("🔄 Loading/reloading development script...");
+      console.log("🔄 Loading development script...");
 
-      // 既存のスクリプトをクリーンアップ
       if (loadedScript) {
         loadedScript.remove();
         loadedScript = null;
         console.log("🧹 Removed old script");
       }
 
-      // スクリプトの内容を取得
-      const response = await fetch(
+      const res = await fetch(
         `${DEV_SERVER}/userscript.user.js?t=${Date.now()}`,
         {
-          cache: "no-cache",
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-          },
+          cache: "no-store",
         }
       );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const scriptContent = await response.text();
-
-      // UserScriptヘッダーを除去（Violetmonkeyの自動検出を回避）
+      const scriptContent = await res.text();
       const cleanedScript = scriptContent.replace(
         /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\n/,
         ""
       );
 
-      // スクリプトを実行
-      const scriptElement = document.createElement("script");
-      scriptElement.id = "dev-script";
-      scriptElement.type = "text/javascript";
-      scriptElement.textContent = `
-        (function() {
-          try {
-            ${cleanedScript}
-            console.log('🚀 Dev script executed successfully');
-          } catch (error) {
-            console.error('❌ Dev script execution error:', error);
-          }
-        })();
-      `;
-
-      document.head.appendChild(scriptElement);
-      loadedScript = scriptElement;
-
-      console.log("✅ Dev script loaded and executed");
-    } catch (error) {
-      console.error("❌ Script loading error:", error);
+      try {
+        const scriptElement = document.createElement("script");
+        scriptElement.textContent = cleanedScript;
+        document.head.appendChild(scriptElement);
+        loadedScript = scriptElement;
+        console.log("✅ Script injected via <script>");
+      } catch {
+        console.warn("⚠️ Falling back to eval()");
+        (0, eval)(cleanedScript);
+      }
+    } catch (err) {
+      console.error("❌ Script loading error:", err);
     }
   }
 
-  // 初期化
   async function initialize() {
     try {
-      // 開発サーバーの接続確認
-      const response = await fetch(`${DEV_SERVER}/userscript.user.js`, {
+      const res = await fetch(`${DEV_SERVER}/userscript.user.js`, {
         method: "HEAD",
       });
-
-      if (response.ok) {
+      if (res.ok) {
+        lastEtag = res.headers.get("etag") || null;
         console.log("✅ Development server connected");
-        lastModified = new Date(
-          response.headers.get("last-modified") || Date.now()
-        ).getTime();
 
-        // 初回スクリプトロード
         await loadDevScript();
 
-        // 定期チェック開始
         checkTimer = setInterval(checkForUpdates, CHECK_INTERVAL);
-        console.log(
-          `👀 Started checking for updates every ${CHECK_INTERVAL / 1000}s`
-        );
+        console.log(`👀 Watching for updates every ${CHECK_INTERVAL / 1000}s`);
       } else {
         throw new Error("Server not responding");
       }
-    } catch (error) {
-      console.error("❌ Development server not available:", error.message);
-      console.log("💡 Make sure to run: bun run dev");
+    } catch (err) {
+      console.error("❌ Development server not available:", err.message);
     }
   }
 
-  // ページロード完了後に初期化
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initialize);
   } else {
     initialize();
   }
 
-  // クリーンアップ
   window.addEventListener("beforeunload", () => {
-    if (checkTimer) {
-      clearInterval(checkTimer);
-    }
+    if (checkTimer) clearInterval(checkTimer);
   });
 
-  // 手動操作ショートカット
+  // ショートカット
   document.addEventListener("keydown", (e) => {
-    if (e.ctrlKey && e.shiftKey) {
-      if (e.key === "R") {
-        e.preventDefault();
-        console.log("🔄 Manual page reload");
-        location.reload();
-      } else if (e.key === "L") {
-        e.preventDefault();
-        console.log("🔄 Manual script reload");
-        loadDevScript();
-      } else if (e.key === "D") {
-        e.preventDefault();
-        console.log("🔍 Debug info:");
-        console.log("- Last modified:", new Date(lastModified));
-        console.log("- Script loaded:", !!loadedScript);
-        console.log("- Check timer active:", !!checkTimer);
-      }
+    if (!e.ctrlKey || !e.shiftKey) return;
+    if (e.key === "R") {
+      e.preventDefault();
+      console.log("🔄 Manual page reload");
+      location.reload();
+    } else if (e.key === "L") {
+      e.preventDefault();
+      console.log("🔄 Manual script reload");
+      loadDevScript();
+    } else if (e.key === "D") {
+      e.preventDefault();
+      console.log("🔍 Debug info:");
+      console.log("- Last ETag:", lastEtag);
+      console.log("- Script loaded:", !!loadedScript);
+      console.log("- Check timer active:", !!checkTimer);
     }
   });
 
-  console.log("🎯 Enhanced development loader ready!");
+  console.log("🎯 Development loader ready!");
   console.log("⌨️ Shortcuts:");
   console.log("   - Ctrl+Shift+R: reload page");
   console.log("   - Ctrl+Shift+L: reload script");
