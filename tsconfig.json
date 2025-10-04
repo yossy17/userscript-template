@@ -13,11 +13,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
-    "types": ["tampermonkey", "vite/client"],
-    "ignoreDeprecations": "6.0"
+    "types": ["tampermonkey", "vite/client"]
   }
 }

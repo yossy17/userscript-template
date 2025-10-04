@@ -13,7 +13,7 @@ export const metadata = {
   },
   version: "0.0.0",
   author: "Yos_sy",
-  match: ["*://music.youtube.com/*"],
+  match: ["*://example.com/*"],
   namespace: "http://tampermonkey.net/",
   icon: "icon",
   grant: ["", , "GM_setValue", "GM_getValue"],
