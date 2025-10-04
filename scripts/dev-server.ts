@@ -4,6 +4,7 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import type { Request, Response, NextFunction } from "express";
 
 // ES modules での __dirname 取得
 const __filename = fileURLToPath(import.meta.url);
@@ -43,7 +44,7 @@ function buildScript() {
       return false;
     }
   } catch (error) {
-    console.error("❌ Build failed:", error.message);
+    console.error("❌ Build failed:", (error as Error).message);
     return false;
   }
 }
@@ -54,15 +55,14 @@ if (!buildScript()) {
   console.error("❌ Initial build failed. Exiting...");
   process.exit(1);
 }
-
 // Browser-sync設定
-bs.init({
+(bs as any).init({
   server: {
     baseDir: "./dist",
     index: false, // index.htmlを探さない
     directory: true, // ディレクトリリストを表示
     middleware: [
-      function (req, res, next) {
+      (req: Request, res: Response, next: NextFunction) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
           "Access-Control-Allow-Methods",
@@ -77,14 +77,21 @@ bs.init({
         res.setHeader("Expires", "0");
 
         // UserScriptファイルの場合、追加ヘッダーを設定
-        if (req.url.endsWith(".user.js")) {
+        if (req.url?.endsWith(".user.js")) {
           const scriptPath = path.join(__dirname, "dist", "userscript.user.js");
 
           if (fs.existsSync(scriptPath)) {
             const stats = fs.statSync(scriptPath);
-            // これを追加することで fetch(…, { method: 'HEAD' }) が
-            // 正しく更新を検知できる
             res.setHeader("Last-Modified", stats.mtime.toUTCString());
+
+            const etag = `"${stats.size}-${stats.mtime.getTime()}"`;
+            res.setHeader("ETag", etag);
+
+            if (req.headers["if-none-match"] === etag) {
+              res.statusCode = 304;
+              res.end();
+              return;
+            }
           }
 
           res.setHeader("Content-Type", "application/javascript");

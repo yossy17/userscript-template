@@ -1,15 +1,17 @@
-# environment
+## Overview
 
-To install dependencies:
+## Features
 
-```bash
-bun install
-```
+## Shortcut List
 
-To run:
+| Key | Type | Description |
+| --- | ---- | ----------- |
+| 1   | foo  | foo hoge.   |
+| 2   | foo  | foo hoge.   |
+| 3   | bar  | bar hoge.   |
 
-```bash
-bun run index.ts
-```
+## Usage
 
-This project was created using `bun init` in bun v1.2.21. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## License
+
+This project is licensed under the [MIT](LICENCE).

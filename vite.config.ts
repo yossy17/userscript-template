@@ -3,6 +3,7 @@ import path from "path";
 import { metadata as rawMetadata } from "./src/metadata.js";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import type { Plugin, OutputBundle, NormalizedOutputOptions } from "rollup";
 
 // ES modules での __dirname 取得
 const __filename = fileURLToPath(import.meta.url);
@@ -10,7 +11,7 @@ const __dirname = path.dirname(__filename);
 
 const pkg = JSON.parse(fs.readFileSync("./package.json", "utf-8"));
 
-function buildMeta(metadata, isDev = false) {
+function buildMeta(metadata: typeof rawMetadata, isDev = false) {
   const metaData = {
     ...metadata,
     version: isDev ? pkg.version + "-dev" : pkg.version,
@@ -22,6 +23,19 @@ function buildMeta(metadata, isDev = false) {
           ko: metadata.name.ko + " (개발판)",
         }
       : metadata.name,
+    icon:
+      "https://github.com/yossy17/" +
+      pkg.name +
+      "/raw/master/images/icons/normal/icon-48.webp",
+    updateURL:
+      "https://github.com/yossy17/" +
+      pkg.name +
+      "/raw/master/dist/userscript.user.js",
+    downloadURL:
+      "https://github.com/yossy17/" +
+      pkg.name +
+      "/raw/master/dist/userscript.user.js",
+    supportURL: "https://github.com/yossy17/" + pkg.name,
   };
 
   let metaBlock = "// ==UserScript==\n";
@@ -61,57 +75,14 @@ const metadata = {
   version: pkg.version,
 };
 
-function userscriptMetaPlugin(isDev = false) {
+function userscriptMetaPlugin(isDev = false): Plugin {
   return {
     name: "userscript-meta",
-    generateBundle(options, bundle) {
+    generateBundle(_options: NormalizedOutputOptions, bundle: OutputBundle) {
       const fileName = "userscript.user.js";
       const chunk = bundle[fileName];
       if (chunk && chunk.type === "chunk") {
-        let code = buildMeta(metadata, isDev) + "\n" + chunk.code;
-
-        // 開発モードの場合、リロード検知機能を追加
-        if (isDev) {
-          const devCode = `
-            // 🔧 Development Mode Features
-            (function() {
-              const DEV_SERVER = 'http://localhost:3000';
-              let lastCheck = Date.now();
-              
-              // Violetmonkey用のリロード検知
-              function checkForUpdates() {
-                fetch(DEV_SERVER + '/userscript.user.js?' + Date.now(), { 
-                  method: 'HEAD',
-                  cache: 'no-store'
-                })
-                .then(response => {
-                  const lastModified = new Date(response.headers.get('last-modified')).getTime();
-                  if (lastModified > lastCheck) {
-                    console.log('🔄 Script updated, reloading page...');
-                    lastCheck = lastModified;
-                    setTimeout(() => location.reload(), 100);
-                  }
-                })
-                .catch(() => {
-                  // 開発サーバーが停止している場合は無視
-                });
-              }
-              
-              // 3秒ごとに更新チェック
-              if (typeof setInterval !== 'undefined') {
-                setInterval(checkForUpdates, 3000);
-              }
-              
-              // 開発モード表示
-              console.log('%c🚀 Development Mode Active', 'color: #4CAF50; font-weight: bold; font-size: 16px;');
-              console.log('%cWatching for changes...', 'color: #2196F3; font-size: 12px;');
-            })();
-
-          `;
-          code = code + devCode;
-        }
-
-        chunk.code = code;
+        chunk.code = buildMeta(metadata, isDev) + "\n" + chunk.code;
       }
     },
   };
@@ -124,7 +95,7 @@ export default defineConfig(({ mode }) => {
     build: {
       emptyOutDir: true,
       minify: false,
-      sourcemap: isDev,
+      sourcemap: true,
       lib: {
         entry: path.resolve(__dirname, "src/main.ts"),
         formats: ["iife"],
